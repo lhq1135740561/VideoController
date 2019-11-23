@@ -1,0 +1,51 @@
+apply plugin: 'com.android.library'
+apply plugin: 'kotlin-android'
+apply plugin: 'kotlin-android-extensions'
+android {
+    compileSdkVersion 29
+    buildToolsVersion "29.0.2"
+
+
+    defaultConfig {
+        minSdkVersion 15
+        targetSdkVersion 29
+        versionCode 1
+        versionName "1.0"
+
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        consumerProguardFiles 'consumer-rules.pro'
+
+        /* ARouter的配置*/
+        javaCompileOptions {
+            annotationProcessorOptions {
+                arguments = [AROUTER_MODULE_NAME: project.getName()]
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    //统一资源管理(配置统一的资源前缀名称)
+    resourcePrefix 'core_'
+
+}
+
+dependencies {
+    api fileTree(dir: 'libs', include: ['*.jar'])
+    //默认
+    api rootProject.ext.lib_kotlin_stdlib_jdk7
+    api rootProject.ext.lib_appcompat
+    api rootProject.ext.lib_core
+    api rootProject.ext.lib_constraintlayout
+    api rootProject.ext.lib_junit
+    api rootProject.ext.lib_test_junit
+    api rootProject.ext.lib_test_espresso
+
+    //ARouter
+    api rootProject.ext.lib_arouter_api
+}

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    package="com.yunge.module_play">
+
+    <application tools:ignore="GoogleAppIndexingWarning">
+        <activity
+            android:name=".ui.activty.PlayVideoActivity"
+            android:screenOrientation="portrait"
+            android:theme="@style/play_AppTheme" />
+    </application>
+
+</manifest>
