@@ -12,9 +12,10 @@
         android:supportsRtl="true"
         android:theme="@style/play_AppTheme"
         tools:ignore="GoogleAppIndexingWarning">
+<!--        android:screenOrientation="portrait"-->
         <activity
             android:name=".ui.activty.PlayVideoActivity"
-            android:screenOrientation="portrait"
+
             android:launchMode="singleInstance">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>

@@ -101,7 +101,7 @@ class PlayControllerView : View {
     //画笔
     private val volumeStoke = dp2Px(context, 30f)  //矩形1区域外圆环的宽度
     private var volumePaint : Paint
-    private var volumeDragPaint: Paint
+    private var volumeDragPaint: Paint   //渐变色画笔
 
     //矩形1区域宽高
     private lateinit var volumeRectF: RectF //矩形区域
@@ -161,7 +161,6 @@ class PlayControllerView : View {
     private val playCoverPaint: Paint  //画笔
 
 
-
     /* 后退键 */
     private val btnBackNormalBmp = BitmapFactory.decodeResource(resources,R.drawable.btn_play_back_normal)
     private var btnBackBmpX: Float = 0f  //后退键图片的按钮x,y轴的坐标
@@ -185,6 +184,51 @@ class PlayControllerView : View {
     private var btnForwardBmpY: Float = 0f
 
     private var isForwardPressed = false  //判断是否在快进键区域被按下
+
+    /**
+     * 播放进度条
+     */
+
+    private val progressToCenterMaxR = dp2Px(context,235f)  //原点到进度条圆环的最大半径值 (180 + 55)dp
+    private val progressToPlayMaxR = dp2Px(context,30f)   //播放控件圆弧到进度条圆环的最大半径值
+
+    private val progressToPlay = dp2Px(context,55f)  //播放控件图形到进度条圆环之间的距离
+
+    private val progressInsideToCenterMaxR = dp2Px(context,180f) + progressToPlay * 0.75f  //内进度条到原点的最大半径 (180 + 55*3/4)dp
+
+    private val progressToCenter: Float
+
+    private var progressX: Float   //播放进度条的x,y轴的坐标
+    private var progressY: Float
+
+    /* 背景阴影部分 */
+    private lateinit var progressRectF: RectF  //播放进度条矩形区域
+    private val progressShadowPaint: Paint  //阴影部分画笔
+
+    /* 进度条背景部分 */
+    private lateinit var progressInsideRectF: RectF //进度条内部背景矩形区域
+    private val progressInsidePaint: Paint    //内部背景画笔
+
+    private val progressInsideMaxR = progressToPlayMaxR / 2  //内部进度条圆弧半径大小
+
+    private val progressInsideToCenter: Float  //内部进度条圆弧的x到原点的距离
+
+    private var progressInsideX: Float   //内部进度条圆弧的x,y轴的坐标
+    private var progressInsideY: Float
+
+    /* 进度条覆盖背景部分 */
+    private var progressCoverPaint: Paint   //渐变色画笔
+
+    /* 进度条的拖动条按钮 */
+    private var progressDragAngle: Float   //拖动条的角度
+
+    private val progressDragBmpNormal = BitmapFactory.decodeResource(res,R.drawable.btn_thumb_normal)
+    private val progressDragBmpPressed = BitmapFactory.decodeResource(res,R.drawable.btn_thumb_pressed)
+
+    private var progressDrawBmpX: Float   //拖动条图片x,y轴的坐标值
+    private var progressDrawBmpY: Float
+
+    private var isProgressDrawPressed = false  //判断拖动条按钮是否被按下了
 
 
     //初始化
@@ -217,7 +261,7 @@ class PlayControllerView : View {
         //画笔
 
         volumePaint = generatePoint(Color.BLUE, Paint.Style.STROKE, 100, volumeStoke) // 区域1圆环画笔
-        volumeDragPaint = generatePoint(Paint.Style.STROKE, 120, volumeStoke, volumeLinearGradient)  //渐变色边圆环画笔
+        volumeDragPaint = generatePoint(Paint.Style.STROKE, 120, volumeStoke,volumeLinearGradient)  //渐变色边圆环画笔
 
         //矩形1区域宽高
         volumeToSpeaker = speakerRadius + volumeStoke/2
@@ -270,6 +314,32 @@ class PlayControllerView : View {
         playToCenter = volume2Tovolume + playToVolume  //播放控件图形到原点之间的距离
 
 
+        /**
+         * 播放进度条
+         */
+        progressX = 0f
+        progressY = 0f
+        progressToCenter = playToCenter + progressToPlay  //变量半径距离 progressToPlay 50dp
+        /* 最大的阴影背景 */
+        progressShadowPaint = generatePoint(Color.RED,Paint.Style.STROKE,100,progressToPlayMaxR)  //progressToPlayMaxR圆弧的宽度 30dp
+
+        /* 进度条内部矩形区域 */
+        progressInsideX = 0f
+        progressInsideY = 0f
+        progressInsideToCenter = playToCenter + progressToPlay
+        progressInsidePaint = generatePoint(Color.GRAY,Paint.Style.STROKE,100,progressInsideMaxR,Paint.Cap.ROUND) //画笔 15dp(圆弧的宽度)
+
+        /* 进度条覆盖背景部分 */
+        progressCoverPaint = generatePoint(Color.BLUE,Paint.Style.STROKE,120,progressInsideMaxR,Paint.Cap.ROUND)  //画笔  15dp(圆弧的宽度)
+
+
+        /* 进度条的拖动条按钮 */
+        progressDragAngle = 40f   //默认45度角度
+
+        progressDrawBmpX = 0f  //拖动条图片的x,y坐标
+        progressDrawBmpY = 0f
+
+
         Log.d(TAG, "-----init")
     }
 
@@ -301,6 +371,7 @@ class PlayControllerView : View {
     }
 
 
+    @SuppressLint("DrawAllocation")
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         super.onMeasure(widthMeasureSpec, heightMeasureSpec)
 
@@ -333,6 +404,7 @@ class PlayControllerView : View {
         volumeY2 = screenHeight - volume2Tovolume
 
 
+        //设置音量拖动图片按钮的默认x,y轴坐标
         if(volumeDragBmpDegreeX != -1.0f && volumeDragBmpDegreeY != -0.1f){
             if(orientation == Configuration.ORIENTATION_LANDSCAPE) {
                 volumeDragBmpX = volumeDragBmpDegreeX
@@ -391,6 +463,23 @@ class PlayControllerView : View {
         //实例化对象
         menu = Menu(bmpMenuBg,bmpLogo,bmpStartButton,bmpEndButton,bmpTextButton)
 
+        /**
+         * 播放进度条
+         */
+
+        //阴影
+        progressX = screenWidth - progressToCenter
+        progressY = screenHeight - progressToCenter
+
+        //内部进度条
+        progressInsideX = screenWidth - progressInsideToCenter
+        progressInsideY = screenHeight - progressInsideToCenter
+
+        //内部拖动条图片按钮默认x,y轴的坐标
+        val x = getAngleX(45f,progressInsideToCenterMaxR)
+        val y = getAngleY(45f,progressInsideToCenterMaxR)
+        progressDrawBmpX = abs(screenWidth - x)
+        progressDrawBmpY = abs(screenHeight - y)
 
     }
 
@@ -449,9 +538,12 @@ class PlayControllerView : View {
         /**
          * 播放控件
          */
+
+        /* 画背景 */
         playRectF = RectF(playViewX,playViewY,screenWidth + playToCenter,screenHeight + playToCenter) //正常矩形区域
         canvas?.drawArc(playRectF, 180f, 90f, false, playPaint)
 
+        /* 按钮图片 */
         //画后退键的按钮图片
         canvas?.drawBitmap(btnBackNormalBmp,btnBackBmpX,btnBackBmpY,bmpPaint)
         //画暂停键的按钮图片
@@ -463,7 +555,7 @@ class PlayControllerView : View {
         //画快进键的按钮图片
         canvas?.drawBitmap(btnForwardNormalBmp,btnForwardBmpX,btnForwardBmpY,bmpPaint)
 
-
+        /* 画按钮覆盖扇形 */
         playCoverRectF = RectF(playViewX,playViewY,screenWidth + playToCenter,screenHeight + playToCenter)  //覆盖矩形
         if(isBackPressed){  //后退键扇形区域是否被按下
             canvas?.drawArc(playCoverRectF, 180f, 30f, false, playCoverPaint)
@@ -474,11 +566,32 @@ class PlayControllerView : View {
 
         }
 
-
-
         if (isForwardPressed){  //快进键扇形区域是否被按下
             canvas?.drawArc(playCoverRectF, 240f, 30f, false, playCoverPaint)
         }
+
+
+        /**
+         * 播放进度条
+         */
+
+        /* 阴影背景部分 */
+        progressRectF = RectF(progressX,progressY, screenWidth + progressToCenter, screenHeight + progressToCenter)
+        canvas?.drawArc(progressRectF,180f,90f,false,progressShadowPaint)
+
+        /* 内部进度条部分 */
+        progressInsideRectF = RectF(progressInsideX,progressInsideY, screenWidth + progressInsideToCenter,
+            screenHeight + progressInsideToCenter)
+        canvas?.drawArc(progressInsideRectF,185f,80f,false,progressInsidePaint)  //画内部进度条
+
+        if(progressDragAngle in 0f .. 80f) {  //拖动条控制的区域角度只能在80度内
+            canvas?.drawArc(progressInsideRectF, 185f, progressDragAngle, false, progressCoverPaint)
+        }
+
+        /* 内部拖动条图片按钮部分 */
+        canvas?.drawBitmap(progressDragBmpNormal,progressDrawBmpX,progressDrawBmpY,bmpPaint)
+
+
 
         Log.d(TAG, "----onDraw")
 
@@ -574,7 +687,7 @@ class PlayControllerView : View {
             MotionEvent.ACTION_DOWN -> {  //手指点击屏幕的操作
                 val dx = event.x
                 val dy = event.y
-                isVolumePressed = isVolumeNearBy(dx, dy)
+                isVolumePressed = isDragBmpNearBy(dx, dy,volumeDragBmpX,volumeDragBmpY,volumeDragBmpNormal) //判断是否在按钮图片区域点击
                 invalidate()
             }
             MotionEvent.ACTION_MOVE -> {  //手指在屏幕移动的操作
@@ -623,9 +736,117 @@ class PlayControllerView : View {
         }
 
 
+        /**
+         *  播放进度条
+         */
+        when(event.action){
+            MotionEvent.ACTION_DOWN -> {
+                val dx =event.x
+                val dy = event.y
+                isProgressDrawPressed = isDragBmpNearBy(dx,dy,progressDrawBmpX,progressDrawBmpY,progressDragBmpNormal) //判断是否在按钮图片区域点击
+
+                Log.d(TAG,"播放进度条手指按下了")
+                invalidate()
+            }
+            MotionEvent.ACTION_MOVE -> {
+
+                isProgressMoveLogic(event)
+
+                Log.d(TAG,"播放进度条手指移动了")
+
+            }
+            MotionEvent.ACTION_UP -> {
+
+                isProgressDrawPressed = false
+                invalidate()
+
+                Log.d(TAG,"播放进度条手指抬起了")
+            }
+        }
+
+
 //        Log.d(TAG,"----onTouchEvent")
 
         return true
+
+    }
+
+    private fun isProgressMoveLogic(event: MotionEvent) {
+
+        var mx = event.x
+        var my = event.y
+
+        val x = event.x
+        val y = event.y
+
+        //获取手指触摸x,y轴坐标的角度值
+//        val angle = getAngle(x,y, screenWidth, screenHeight)
+
+        //获取三角形对应的x,y轴的两条直角边的长度
+        mx = abs(screenWidth - mx)
+        my = abs(screenHeight - my)
+
+        //获取区域2的cos角度
+        val volumeRectF2Angle = (mx / sqrt(mx.pow(2) + my.pow(2))).toDouble()
+        var angle = acos(volumeRectF2Angle) //获取反余弦函数值
+        angle = toDegrees(angle)  //将圆弧度转化为角度数
+
+        Log.e(TAG,"角度值：$angle")
+
+        if(event.pointerCount == 1) {    //单手模式
+            if (isProgressDrawPressed) {  //按钮图片被按下
+                Log.e(TAG,"播放进度条被按下了")
+                //判断角度具体范围
+                if (angle in 5f..85f) {
+                    Log.e(TAG,"角度执行")
+                    //获取在(相同r半径下，angle角度不同)时，x,y轴的具体位置
+                    val dragBmpX = screenWidth - getAngleX(angle.toFloat(), progressInsideToCenterMaxR)
+                    val dragBmpY = screenHeight - getAngleY(angle.toFloat(), progressInsideToCenterMaxR)
+
+                    //获取角度为5度时的x,y轴的值
+                    val testX = getAngleX(angle.toFloat(), progressInsideToCenterMaxR)
+
+                    //当角度为5度时，只能获取y轴的坐标值时，才能进度条距离x轴的最小距离
+                    val dragBmpXYtoFive = getAngleY(5.0f, progressInsideToCenterMaxR)  //获取最小的
+
+                    if (mx in 0f..screenWidth) {
+                        if (my in 0f..screenHeight) {
+
+                            Log.e(TAG,"手指触摸x,y范围执行")
+
+                            //拖动条按钮图片最大限制x轴值
+
+                            val bmpMaxX = screenWidth - progressDragBmpPressed.width / 2 - dragBmpXYtoFive
+
+                            if (progressDrawBmpX in 0f..bmpMaxX) {   //拖动条按钮图片X轴坐标限制条件  -> 才能保证x轴不被拖出外面去
+                                Log.e(TAG,"按钮图片X轴切换执行")
+                                progressDrawBmpX = dragBmpX
+                                if (progressDrawBmpX >= bmpMaxX) progressDrawBmpX = bmpMaxX - 10f
+                            }
+
+                            //拖动条按钮图片最大限制x轴值
+
+                            val bmpMaxY = screenHeight - progressDragBmpPressed.height / 2 - dragBmpXYtoFive
+                            if (progressDrawBmpY in 0f..bmpMaxY) {  //拖动条按钮图片Y轴坐标限制条件  -> 才能保证y轴不被拖出外面去
+                                Log.e(TAG,"按钮图片Y轴切换执行")
+                                progressDrawBmpY = dragBmpY
+                                if (progressDrawBmpY >= bmpMaxY) progressDrawBmpY = bmpMaxY - 10f
+                            }
+
+
+                            progressDragAngle = angle.toFloat()  //设置覆盖区域的进度条角度
+
+                            Log.e(TAG,"$bmpMaxX----$bmpMaxY---$dragBmpXYtoFive---$testX")
+                            //1005.71533----1904.7153---48.284637---424.53964
+                        }
+                    }
+
+                    invalidate() //刷新重绘
+                }
+
+            }
+        }
+
 
     }
 
@@ -654,6 +875,7 @@ class PlayControllerView : View {
     /**
      * 音量条手指移动事件监听
      */
+
     private fun isVolumeMoveLogic(event: MotionEvent) {
         /**
          * 用于计算的手指运动轨迹X，Y轴距离圆心的距离(利用轨迹1、轨迹2可以确定音量条的真正的运动轨迹)
@@ -669,13 +891,10 @@ class PlayControllerView : View {
         //音量拖动图片所在的最大半径大小(该半径要大于区域1的半径150dp,默认图片的半径也大于150dp)
         val volumeRadiusMax = dp2Px(context, 120f)
 
-        //获取区域1范围的最大X,Y轴的值(用于给音量条图片在限定条件)
-        val volumeDrawMoveX = screenWidth - volumeRadiusMax
-        val volumeDrawMoveY = screenHeight - volumeRadiusMax
-
 
         if (event.pointerCount == 1) {  //判断是否是单手指操作
             if (isVolumePressed) {
+
                 //获取三角形对应的x,y轴的两条直角边的长度
                 mx = abs(screenWidth - mx)
                 my = abs(screenHeight - my)
@@ -695,82 +914,102 @@ class PlayControllerView : View {
                 Log.d(TAG, "测试cos角度：$cos")
 
                 /**
-                 * 根据度数正推导出 x = 余弦值 cos * 斜边
+                 * 2.根据度数正推导出 x = 余弦值 cos * 斜边
                  */
-                //1.角度转弧度
-                var radian = Math.toRadians(volumeRectF2cos)
-                //正余弦值
-                radian = cos(radian)
 
-                /**
-                 * 确定最终具体的x,y坐标的值  (要用屏幕的宽度，高度减去计算的宽高)
-                 *  最终x = 屏幕宽度 - 三角形x轴边长
-                 *  最终y = 屏幕高度 - 三角形y轴边长
-                 */
-                //三角形的x,y轴的边长值
-                val x = radian * volumeRadiusMax
-                val y = sqrt(volumeRadiusMax.pow(2) - x.pow(2.0))
-                //最终的x,y具体位置
-                val volumeDragBmpMx = abs(screenWidth - x)
-                val volumeDragBmpMy = abs(screenHeight - y)
+                if (volumeRectF2cos in 0f..90f) {   //限制手指触摸x,y轴坐标计算的角度在 0 - 90 度之间
+                    //1.角度转弧度
+                    var radian = Math.toRadians(volumeRectF2cos)
+                    //正余弦值
+                    radian = cos(radian)
 
-                Log.d(TAG, "测试cos角度：$volumeDragBmpMx-----$volumeDragBmpMy")
+                    /**
+                     * 确定最终具体的x,y坐标的值  (要用屏幕的宽度，高度减去计算的宽高)
+                     *  最终x = 屏幕宽度 - 三角形x轴边长
+                     *  最终y = 屏幕高度 - 三角形y轴边长
+                     */
+                    //三角形的x,y轴的边长值
+                    val x = radian * volumeRadiusMax
+                    val y = sqrt(volumeRadiusMax.pow(2) - x.pow(2.0))
+                    //最终的x,y具体位置
+                    val volumeDragBmpMx = abs(screenWidth - x)
+                    val volumeDragBmpMy = abs(screenHeight - y)
 
-                //手指移动到哪，X轴就到哪
-                if (firstMx >= 0 && firstMx <= screenWidth - volumeDragBmpNormal.width.toFloat()+13) { //判断音量条x轴移动分大小基本范围
-                    //移动mx,my轴的位置，不能超过圆弧线的范围
+
+                    Log.d(TAG, "测试cos角度：$volumeDragBmpMx-----$volumeDragBmpMy")
+
+
+                    //手指移动到哪，X轴就到哪
+                    if (firstMx in 0f..screenWidth) { //判断音量条x轴移动分大小基本范围
+                        //移动mx,my轴的位置，不能超过圆弧线的范围
 //                    if (sqrt(mx * mx + my * my) <= volumeRadiusMax) {  //限制只能在半圆弧内移动
 
-                        volumeDragBmpX = volumeDragBmpMx.toFloat()    //获取拖动移动角度后通过三角形公式计算出的X轴，并赋值
-                        volumeRectFProgress = volumeRectF2cos.toFloat()  //设置移动的cos角度,即区域2的圆弧角度
+                        //手指移动到哪，Y轴就到哪
+                        if (firstMy in 0f..screenHeight) { //判断音量条y轴移动分大小基本范围
 
-                        when(volumeRectFProgress){
-                            in 0f..1.5f -> speakerBmpStyle = SPEAKER_MUTE
-                            in 1.6f..30f -> speakerBmpStyle = SPEAKER_MIN   //在区间 1到30度之间
-                            in 30.1f..60f -> speakerBmpStyle = SPEAKER_MIDDLE //在区间 30到60度之间
-                            in 60.1f..90f -> speakerBmpStyle = SPEAKER_MAX  //在区间 60到90度之间
-                            else -> {
 
+
+                            if(volumeDragBmpX in 0f..screenWidth-(volumeDragBmpPressed.width/2)){  //限制拖动条按钮图片最大的x轴位置(防止按钮图片拖出外面)
+                                volumeDragBmpX = volumeDragBmpMx.toFloat()    //获取拖动移动角度后通过三角形公式计算出的X轴，并赋值
+                                //如果x轴坐标值大于等于限定的具体时(最大值限定值screenWidth-(volumeDragBmpPressed.width/2))就重新赋值(一定要小于最大限制值)
+                                if (volumeDragBmpX >= screenWidth-(volumeDragBmpPressed.width/2)){
+                                    volumeDragBmpX = screenWidth-(volumeDragBmpPressed.width/2 + 10f)  //重新赋值，防止按钮图片的X轴坐标不更新角度值
+                                }
+
+                                Log.d(TAG,"限定值x------$volumeDragBmpX")
                             }
+                            volumeRectFProgress = volumeRectF2cos.toFloat()  //设置移动的cos角度,即区域2的圆弧角度
+
+                            when (volumeRectFProgress) {
+                                in 0f..1.5f -> speakerBmpStyle = SPEAKER_MUTE
+                                in 1.6f..30f -> speakerBmpStyle = SPEAKER_MIN   //在区间 1到30度之间
+                                in 30.1f..60f -> speakerBmpStyle = SPEAKER_MIDDLE //在区间 30到60度之间
+                                in 60.1f..90f -> speakerBmpStyle = SPEAKER_MAX  //在区间 60到90度之间
+                                else -> {
+
+                                }
+                            }
+                            //本地数据持久化存储
+                            PlayControllerDao.cacheVolumeProgressDegree(context, volumeRectFProgress, volumeDragBmpX)
+
+                            if(volumeDragBmpY in 0f..screenHeight - (volumeDragBmpPressed.height/2)){  //限制拖动条按钮图片最大的y轴位置(防止按钮图片拖出外面)
+                                volumeDragBmpY = volumeDragBmpMy.toFloat()    //获取拖动移动角度后通过三角形公式计算出的Y轴，并赋值
+                                //如果y轴坐标值大于等于限定的具体时(最大值限定值screenHeight - (volumeDragBmpPressed.height/2)就重新赋值(一定要小于最大限制值)
+                                if (volumeDragBmpY >= screenHeight - (volumeDragBmpPressed.height/2)){
+                                    volumeDragBmpY = screenHeight - (volumeDragBmpPressed.height/2 + 10f)  //重新赋值，防止按钮图片的Y轴坐标不更新角度值
+                                }
+
+                                Log.d(TAG,"限定值y------$volumeDragBmpY")
+                            }
+                            volumeRectFProgress = volumeRectF2cos.toFloat()
+                            //本地数据持久化存储
+                            PlayControllerDao.cacheVolumeProgressDegreeY(context, volumeDragBmpY)
                         }
 
-                        Log.d(TAG,"圆弧的角度：$volumeRectFProgress")
-//
-                        //本地数据持久化存储
-                        PlayControllerDao.cacheVolumeProgressDegree(context,volumeRectFProgress,volumeDragBmpX)
-//                    }
+                        Log.d(TAG, "圆弧的角度：$volumeRectFProgress")
 
+                    }
+
+
+                    invalidate() //刷新重绘
                 }
-
-                //手指移动到哪，Y轴就到哪
-                if (firstMy >= 0 && firstMy <= screenHeight - volumeDragBmpNormal.height.toFloat()+13) { //判断音量条y轴移动分大小基本范围
-
-//                    if (sqrt(mx * mx + my * my) <= volumeRadiusMax){
-                        volumeDragBmpY = volumeDragBmpMy.toFloat()    //获取拖动移动角度后通过三角形公式计算出的Y轴，并赋值
-                        volumeRectFProgress = volumeRectF2cos.toFloat()
-                        //本地数据持久化存储
-                        PlayControllerDao.cacheVolumeProgressDegreeY(context,volumeDragBmpY)
-//                    }
-                }
-
-
-                invalidate() //刷新重绘
             }
         }
     }
 
     /**
-     *  判断音量条图片是否在具体的范围被按下
+     * 判断音量条图片是否在具体的范围被按下
      */
-    private fun isVolumeNearBy(x: Float, y: Float): Boolean {
+    private fun isDragBmpNearBy(x: Float, y: Float,dragBmpX: Float,dragBmpY: Float,dragBmp: Bitmap): Boolean {
 
-//        val r = currentVolumeToCenter(x,y,screenWidth,screenHeight)
-
-//        val volumeDragBmpR = currentVolumeToCenter()
+        /**
+         *  1.dragBmpX、dragBmpY 拖动条按钮图片的x,y轴的坐标
+         *  2.dragBmp 拖动条按钮图片
+         */
 
         //判断音量条图片触摸的具体范围(就是音量条图片本身的图片区域范围)
-        if (x >= volumeDragBmpX - volumeDragBmpNormal.width && x <= volumeDragBmpX + volumeDragBmpNormal.width) {
-            return y >= volumeDragBmpY - volumeDragBmpNormal.height && y <= volumeDragBmpY + volumeDragBmpNormal.height
+        if (x >= dragBmpX - dragBmp.width && x <= dragBmpX + dragBmp.width) {
+            return y >= dragBmpY - dragBmp.height && y <= dragBmpY + dragBmp.height
         }
 
         return false
@@ -799,7 +1038,7 @@ class PlayControllerView : View {
     /**
      * 获取画笔
      */
-    private fun generatePoint(color: Int, style: Paint.Style, alpha: Int, width: Float, shader: Shader? = null): Paint {
+    private fun generatePoint(color: Int, style: Paint.Style, alpha: Int, width: Float,round: Paint.Cap? = Paint.Cap.SQUARE, shader: Shader? = null): Paint {
         //创建Paint对象，并使用apply函数
         Paint().apply {
 
@@ -808,7 +1047,7 @@ class PlayControllerView : View {
             this.alpha = alpha
             this.strokeWidth = width
 
-//            this.strokeCap = Paint.Cap.ROUND  //设置圆角
+            this.strokeCap = round  //设置圆角
             this.isAntiAlias = true //设置抗锯齿
             this.isDither = true //设置抖动
             this.shader = shader
@@ -821,7 +1060,7 @@ class PlayControllerView : View {
     /**
      * 获取画笔
      */
-    private fun generatePoint(style: Paint.Style, alpha: Int, width: Float, shader: Shader? = null): Paint {
+    private fun generatePoint(style: Paint.Style, alpha: Int, width: Float,shader: Shader? = null): Paint {
         //创建Paint对象，并使用apply函数
         Paint().apply {
             this.style = style
@@ -880,6 +1119,27 @@ class PlayControllerView : View {
         volumeDragBmpY = abs(screenHeight - y).toFloat()
 
         Log.d(TAG, "测试cos角度：$x-----$y")
+    }
+
+
+    /**
+     * 条件：手指触摸的x,y轴的坐标，即三角形的a、b两条直角边长
+     * 结果：求cos夹角的角度数
+     */
+    private fun getAngle(x: Float,y: Float,screenWidth: Float,screenHeight: Float): Float{
+        //获取相对的x,y值(即a和b两条边的值)
+        val a = abs(screenWidth - x)
+        val b = abs(screenHeight - y)
+
+        //获取区域2的cos角度
+//        val volumeRectF2Angle = (mx / sqrt(mx.pow(2) + my.pow(2))).toDouble()
+//        var volumeRectF2cos = acos(volumeRectF2Angle) //获取反余弦函数值
+//        volumeRectF2cos = toDegrees(volumeRectF2cos)  //将圆弧度转化为角度数
+
+        val angleThan = x / sqrt(a.pow(2) + b.pow(2))  //获取对角与斜边的比例
+        var angleAcos = acos(angleThan)  //获取反余弦函数值 (这句容易出现问题 -> 错了角度求不到)
+
+        return toDegrees(angleAcos.toDouble()).toFloat()   //将圆弧度转成角度值
     }
 
 
