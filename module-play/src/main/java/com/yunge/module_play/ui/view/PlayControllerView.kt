@@ -327,7 +327,7 @@ class PlayControllerView : View {
         progressInsideX = 0f
         progressInsideY = 0f
         progressInsideToCenter = playToCenter + progressToPlay
-        progressInsidePaint = generatePoint(Color.GRAY,Paint.Style.STROKE,100,progressInsideMaxR,Paint.Cap.ROUND) //画笔 15dp(圆弧的宽度)
+        progressInsidePaint = generatePoint(Color.GRAY,Paint.Style.STROKE,150,progressInsideMaxR,Paint.Cap.ROUND) //画笔 15dp(圆弧的宽度)
 
         /* 进度条覆盖背景部分 */
         progressCoverPaint = generatePoint(Color.BLUE,Paint.Style.STROKE,120,progressInsideMaxR,Paint.Cap.ROUND)  //画笔  15dp(圆弧的宽度)
@@ -492,7 +492,7 @@ class PlayControllerView : View {
         /**
          * 子View测试
          */
-        menu.onMyDraw(canvas,bmpPaint)
+//        menu.onMyDraw(canvas,bmpPaint)
 
 
         /**
@@ -543,6 +543,21 @@ class PlayControllerView : View {
         playRectF = RectF(playViewX,playViewY,screenWidth + playToCenter,screenHeight + playToCenter) //正常矩形区域
         canvas?.drawArc(playRectF, 180f, 90f, false, playPaint)
 
+        /* 画按钮覆盖扇形 */
+        playCoverRectF = RectF(playViewX,playViewY,screenWidth + playToCenter,screenHeight + playToCenter)  //覆盖矩形
+        if(isBackPressed){  //后退键扇形区域是否被按下
+            canvas?.drawArc(playCoverRectF, 180f, 30f, false, playCoverPaint)
+        }
+
+        if (isPausePressed){  //暂停键扇形区域是否被按下
+            canvas?.drawArc(playRectF, 210f, 30f, false, playCoverPaint)
+
+        }
+
+        if (isForwardPressed){  //快进键扇形区域是否被按下
+            canvas?.drawArc(playRectF, 240f, 30f, false, playCoverPaint)
+        }
+
         /* 按钮图片 */
         //画后退键的按钮图片
         canvas?.drawBitmap(btnBackNormalBmp,btnBackBmpX,btnBackBmpY,bmpPaint)
@@ -555,20 +570,7 @@ class PlayControllerView : View {
         //画快进键的按钮图片
         canvas?.drawBitmap(btnForwardNormalBmp,btnForwardBmpX,btnForwardBmpY,bmpPaint)
 
-        /* 画按钮覆盖扇形 */
-        playCoverRectF = RectF(playViewX,playViewY,screenWidth + playToCenter,screenHeight + playToCenter)  //覆盖矩形
-        if(isBackPressed){  //后退键扇形区域是否被按下
-            canvas?.drawArc(playCoverRectF, 180f, 30f, false, playCoverPaint)
-        }
 
-        if (isPausePressed){  //暂停键扇形区域是否被按下
-            canvas?.drawArc(playCoverRectF, 210f, 30f, false, playCoverPaint)
-
-        }
-
-        if (isForwardPressed){  //快进键扇形区域是否被按下
-            canvas?.drawArc(playCoverRectF, 240f, 30f, false, playCoverPaint)
-        }
 
 
         /**
@@ -584,12 +586,16 @@ class PlayControllerView : View {
             screenHeight + progressInsideToCenter)
         canvas?.drawArc(progressInsideRectF,185f,80f,false,progressInsidePaint)  //画内部进度条
 
-        if(progressDragAngle in 0f .. 80f) {  //拖动条控制的区域角度只能在80度内
+        if(progressDragAngle in 0f .. 80f) {  //拖动条控制的区域角度只能在80度内 (185°,265°)
             canvas?.drawArc(progressInsideRectF, 185f, progressDragAngle, false, progressCoverPaint)
         }
 
         /* 内部拖动条图片按钮部分 */
-        canvas?.drawBitmap(progressDragBmpNormal,progressDrawBmpX,progressDrawBmpY,bmpPaint)
+        if (isProgressDrawPressed){  //按下拖动条时，切换按钮图片
+            canvas?.drawBitmap(progressDragBmpPressed,progressDrawBmpX,progressDrawBmpY,bmpPaint)
+        }else{
+            canvas?.drawBitmap(progressDragBmpNormal,progressDrawBmpX,progressDrawBmpY,bmpPaint)
+        }
 
 
 
@@ -797,7 +803,7 @@ class PlayControllerView : View {
             if (isProgressDrawPressed) {  //按钮图片被按下
                 Log.e(TAG,"播放进度条被按下了")
                 //判断角度具体范围
-                if (angle in 5f..85f) {
+                if (angle in 0f..85f) {
                     Log.e(TAG,"角度执行")
                     //获取在(相同r半径下，angle角度不同)时，x,y轴的具体位置
                     val dragBmpX = screenWidth - getAngleX(angle.toFloat(), progressInsideToCenterMaxR)
@@ -809,41 +815,62 @@ class PlayControllerView : View {
                     //当角度为5度时，只能获取y轴的坐标值时，才能进度条距离x轴的最小距离
                     val dragBmpXYtoFive = getAngleY(5.0f, progressInsideToCenterMaxR)  //获取最小的
 
-                    if (mx in 0f..screenWidth) {
-                        if (my in 0f..screenHeight) {
+                    if (x in 0f..screenWidth) {
+                        if (y in 0f..screenHeight) {
 
                             Log.e(TAG,"手指触摸x,y范围执行")
 
                             //拖动条按钮图片最大限制x轴值
+                            val bmpMinX = screenWidth - progressInsideToCenterMaxR  //限定的最小宽度
+                            val bmpMaxX = screenWidth - progressDragBmpNormal.width / 2 - dragBmpXYtoFive //限定的最大宽度
 
-                            val bmpMaxX = screenWidth - progressDragBmpPressed.width / 2 - dragBmpXYtoFive
-
-                            if (progressDrawBmpX in 0f..bmpMaxX) {   //拖动条按钮图片X轴坐标限制条件  -> 才能保证x轴不被拖出外面去
+                            if (progressDrawBmpX in bmpMinX..bmpMaxX) {   //拖动条按钮图片X轴坐标限制条件  -> 才能保证x轴不被拖出外面去
                                 Log.e(TAG,"按钮图片X轴切换执行")
-                                progressDrawBmpX = dragBmpX
-                                if (progressDrawBmpX >= bmpMaxX) progressDrawBmpX = bmpMaxX - 10f
+                                //(拖动条按钮图片的x轴的具体坐标= 具体半径r下计算的x轴距离 - 按钮图片自身width宽度的一半)
+                                progressDrawBmpX = dragBmpX   //小bug：按钮X轴的坐标与进度条轨道不符合 + progressDragBmpNormal.width/2
+                                if (progressDrawBmpX >= bmpMaxX) progressDrawBmpX = bmpMaxX
                             }
 
-                            //拖动条按钮图片最大限制x轴值
-
-                            val bmpMaxY = screenHeight - progressDragBmpPressed.height / 2 - dragBmpXYtoFive
-                            if (progressDrawBmpY in 0f..bmpMaxY) {  //拖动条按钮图片Y轴坐标限制条件  -> 才能保证y轴不被拖出外面去
+                            //拖动条按钮图片最大限制y轴值
+                            val bmpMinY = screenHeight - progressInsideToCenterMaxR  //限定的最小高度
+                            val bmpMaxY = screenHeight - progressDragBmpNormal.height / 2 - dragBmpXYtoFive //限定的最大高度
+                            if (progressDrawBmpY in bmpMinY..bmpMaxY) {  //拖动条按钮图片Y轴坐标限制条件  -> 才能保证y轴不被拖出外面去
                                 Log.e(TAG,"按钮图片Y轴切换执行")
-                                progressDrawBmpY = dragBmpY
-                                if (progressDrawBmpY >= bmpMaxY) progressDrawBmpY = bmpMaxY - 10f
+                                //(拖动条按钮图片的y轴的具体坐标= 具体半径r下计算的y轴距离 - 按钮图片自身height高度的一半)
+                                progressDrawBmpY = dragBmpY  //小bug：按钮Y轴的坐标与进度条轨道不符合  + progressDragBmpNormal.height/2
+                                if (progressDrawBmpY >= bmpMaxY) progressDrawBmpY = bmpMaxY
                             }
 
+                            /**
+                             *  1.默认的进度条起始点角度为：185°， 限制条件是：angle 在(0°到80°)，具体的范围是：(185°,265°)
+                             *  2.这里的限定条件为：angle在(5°到85°)之间，所以重新赋值时要给(angle - 5°)才能符合在上面中限制条件
+                             */
+                            progressDragAngle = if(angle >= 5f) {  //如果手指的角度大于5°时，进度条的真实角度要减去5°；小于5°时进度条角度都为0°
+                                angle.toFloat() - 5f  //设置覆盖区域的进度条角度
+                            }else{
+                                0f
+                            }
 
-                            progressDragAngle = angle.toFloat()  //设置覆盖区域的进度条角度
-
-                            Log.e(TAG,"$bmpMaxX----$bmpMaxY---$dragBmpXYtoFive---$testX")
-                            //1005.71533----1904.7153---48.284637---424.53964
+                            Log.e(TAG,"打印x,y,角度：${screenWidth-dragBmpX}----${screenHeight - dragBmpY}----$angle----半径值：$progressInsideToCenterMaxR")
+//                            Log.e(TAG,"打印：$bmpMaxX----$bmpMaxY---$dragBmpXYtoFive---$testX")
+                            //打印：1005.71533----1904.7153---48.284637---424.53964
                         }
                     }
 
-                    invalidate() //刷新重绘
                 }
 
+                //判断角度小于5°或者大于85°时，进度条显示问题bug
+ /*               if(angle <= 5f){
+                    progressDragAngle = 0f
+                    Log.e(TAG,"度数------$progressDragAngle")
+                }else if(angle >= 85f){
+                    progressDragAngle = 80f
+                    Log.e(TAG,"度数------$progressDragAngle")
+                }
+
+  */
+
+                invalidate() //刷新重绘
             }
         }
 
@@ -953,7 +980,7 @@ class PlayControllerView : View {
                                 volumeDragBmpX = volumeDragBmpMx.toFloat()    //获取拖动移动角度后通过三角形公式计算出的X轴，并赋值
                                 //如果x轴坐标值大于等于限定的具体时(最大值限定值screenWidth-(volumeDragBmpPressed.width/2))就重新赋值(一定要小于最大限制值)
                                 if (volumeDragBmpX >= screenWidth-(volumeDragBmpPressed.width/2)){
-                                    volumeDragBmpX = screenWidth-(volumeDragBmpPressed.width/2 + 10f)  //重新赋值，防止按钮图片的X轴坐标不更新角度值
+                                    volumeDragBmpX = screenWidth-(volumeDragBmpPressed.width/2 + 0.1f)  //重新赋值，防止按钮图片的X轴坐标不更新角度值
                                 }
 
                                 Log.d(TAG,"限定值x------$volumeDragBmpX")
@@ -976,7 +1003,7 @@ class PlayControllerView : View {
                                 volumeDragBmpY = volumeDragBmpMy.toFloat()    //获取拖动移动角度后通过三角形公式计算出的Y轴，并赋值
                                 //如果y轴坐标值大于等于限定的具体时(最大值限定值screenHeight - (volumeDragBmpPressed.height/2)就重新赋值(一定要小于最大限制值)
                                 if (volumeDragBmpY >= screenHeight - (volumeDragBmpPressed.height/2)){
-                                    volumeDragBmpY = screenHeight - (volumeDragBmpPressed.height/2 + 10f)  //重新赋值，防止按钮图片的Y轴坐标不更新角度值
+                                    volumeDragBmpY = screenHeight - (volumeDragBmpPressed.height/2 + 0.1f)  //重新赋值，防止按钮图片的Y轴坐标不更新角度值
                                 }
 
                                 Log.d(TAG,"限定值y------$volumeDragBmpY")
@@ -1038,7 +1065,26 @@ class PlayControllerView : View {
     /**
      * 获取画笔
      */
-    private fun generatePoint(color: Int, style: Paint.Style, alpha: Int, width: Float,round: Paint.Cap? = Paint.Cap.SQUARE, shader: Shader? = null): Paint {
+    private fun generatePoint(color: Int, style: Paint.Style, alpha: Int, width: Float, shader: Shader? = null): Paint {
+        //创建Paint对象，并使用apply函数
+        Paint().apply {
+
+            this.color = color
+            this.style = style
+            this.alpha = alpha
+            this.strokeWidth = width
+
+//            this.strokeCap = round  //设置圆角
+            this.isAntiAlias = true //设置抗锯齿
+            this.isDither = true //设置抖动
+            this.shader = shader
+
+        }.let {
+            return it
+        }
+    }
+
+    private fun generatePoint(color: Int, style: Paint.Style, alpha: Int, width: Float,round: Paint.Cap, shader: Shader? = null): Paint {
         //创建Paint对象，并使用apply函数
         Paint().apply {
 
